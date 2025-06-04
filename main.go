@@ -69,29 +69,24 @@ func AuthAccess() gin.HandlerFunc {
 
 		if err != nil {
 			c.Redirect(http.StatusTemporaryRedirect, "/service/refresh")
-			c.AbortWithStatus(http.StatusForbidden)
 			return
 		}
 
 		if tokenString == "" {
 			c.Redirect(http.StatusTemporaryRedirect, "/service/refresh")
-			c.AbortWithStatus(http.StatusForbidden)
 			return
 		}
 
 		claims, err := config.TokenAuthenticate(tokenString)
 		if claims == nil {
 			c.Redirect(http.StatusTemporaryRedirect, "/service/refresh")
-			c.AbortWithStatus(http.StatusForbidden)
 			return
 		}
 		if err != nil {
 			c.Redirect(http.StatusTemporaryRedirect, "/service/refresh")
-			c.AbortWithStatus(http.StatusForbidden)
 			return
 		}
 		if claims.TokenType != "access" {
-			c.AbortWithStatus(http.StatusForbidden)
 			return
 		}
 
@@ -227,6 +222,11 @@ func main() {
 	})
 
 	r.GET("/service/refresh", AuthRefresh(), func(c *gin.Context) {
+		lastPage := c.Request.Referer()
+		if lastPage == "" {
+			lastPage = "/"
+		}
+		c.Header("Location", lastPage)
 
 		username := c.MustGet("username").(string)
 
@@ -262,7 +262,8 @@ func main() {
 			HttpOnly: true,
 			SameSite: http.SameSiteStrictMode,
 		})
-		c.Status(http.StatusOK)
+
+		c.Status(http.StatusSeeOther)
 
 	})
 
