@@ -262,7 +262,7 @@ func main() {
 			HttpOnly: true,
 			SameSite: http.SameSiteStrictMode,
 		})
-		c.Redirect(http.StatusSeeOther, "/home")
+		c.Status(http.StatusOK)
 
 	})
 
