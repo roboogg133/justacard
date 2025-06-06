@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -24,6 +25,14 @@ func HashPassword(password string) (string, error) {
 
 	return string(bytes), err
 }
+
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
+
+
 
 func Authenticate(user string, rawpass string) bool {
 	config.InitDB()
@@ -216,11 +225,6 @@ func main() {
 
 	})
 
-	r.GET("/service/validate", AuthAccess(), func(c *gin.Context) {
-
-		c.JSON(http.StatusOK, gin.H{"response": c.MustGet("username").(string)})
-	})
-
 	r.GET("/service/refresh", AuthRefresh(), func(c *gin.Context) {
 		lastPage := c.Request.Referer()
 		if lastPage == "" {
@@ -281,6 +285,7 @@ func main() {
 		username := c.MustGet("username").(string)
 
 		c.HTML(http.StatusOK, "home.html", gin.H{"Name": username})
+
 	})
 
 	r.Run(":8080")
