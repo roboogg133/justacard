@@ -12,12 +12,22 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v5"
+	gonanoid "github.com/matoous/go-nanoid/v2"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type LoginRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+}
+
+type Game struct {
+	Id      string   `json:"id"`
+	Status  string   `json:"status"`
+	Public  bool     `json:"public"`
+	Owner   string   `json:"owner"`
+	Players []string `json:"players"`
+	Many    int      `json:"many"`
 }
 
 func HashPassword(password string) (string, error) {
@@ -31,8 +41,6 @@ var upgrader = websocket.Upgrader{
 		return true
 	},
 }
-
-
 
 func Authenticate(user string, rawpass string) bool {
 	config.InitDB()
@@ -99,6 +107,8 @@ func AuthAccess() gin.HandlerFunc {
 			return
 		}
 
+		log.Printf("Access token authenticated for user: %s", claims.Username)
+
 		c.Set("username", claims.Username)
 		c.Next()
 	}
@@ -148,7 +158,7 @@ func main() {
 		var req LoginRequest
 
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"response": "badrequest"})
+			c.Status(http.StatusBadRequest)
 			return
 		}
 
@@ -277,9 +287,68 @@ func main() {
 		username := c.MustGet("username").(string)
 
 		c.HTML(http.StatusOK, "home.html", gin.H{"Name": username})
+
 	})
 
-	r.GET("/service/createRoom", AuthAccess(), func(c *gin.Context) {
+	r.POST("/service/createRoom", AuthAccess(), func(c *gin.Context) {
+
+		// Creating the room
+
+		usernameFuck, exist := c.Get("username")
+		if !exist {
+			c.Redirect(http.StatusSeeOther, "/service/createRoom")
+			return
+		}
+		username := usernameFuck.(string)
+
+		var game Game
+
+		if err := c.ShouldBindJSON(&game); err != nil {
+			c.Status(http.StatusBadRequest)
+			return
+		}
+
+		game.Owner = username
+		id, err := gonanoid.Generate("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", 9)
+		if err != nil {
+			log.Printf("error: %s", err.Error())
+			c.Status(http.StatusInternalServerError)
+			return
+		}
+		game.Id = id
+
+		game.Status = "open"
+
+		config.InitDB()
+
+		_, err = config.DB.Exec(context.Background(),
+			"INSERT INTO games (id, owner, status, public, players, many) VALUES ($1, $2, $3, $4, $5, $6)", id, username, game.Status, game.Public, []string{username}, game.Many)
+
+		if err != nil {
+			log.Printf("error: %s", err.Error())
+			c.Status(http.StatusInternalServerError)
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"id": id})
+
+		// room addded on database
+
+		//	r.LoadHTMLFiles("pages/home.html")
+
+		//		c.HTML(http.StatusOK, "home.html", gin.H{"Name": username})
+
+	})
+
+	r.GET("/home/:id", AuthAccess(), func(c *gin.Context) {
+
+		id := c.Param("id")
+
+		if id == "" {
+			c.Redirect(http.StatusTemporaryRedirect, "/home")
+			return
+		}
+
 		r.LoadHTMLFiles("pages/home.html")
 
 		username := c.MustGet("username").(string)
