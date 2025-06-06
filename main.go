@@ -22,12 +22,19 @@ type LoginRequest struct {
 }
 
 type Game struct {
-	Id      string   `json:"id"`
-	Status  string   `json:"status"`
-	Public  bool     `json:"public"`
-	Owner   string   `json:"owner"`
-	Players []string `json:"players"`
-	Many    int      `json:"many"`
+	Id         string   `json:"id"`
+	Status     string   `json:"status"`
+	MatchType  string   `json:"matchType"`
+	Owner      string   `json:"owner"`
+	Players    []string `json:"players"`
+	Many       int      `json:"many"`
+	MaxPlayers int      `json:"maxPlayers"`
+	Winner     string   `json:"winner"`
+}
+
+type GameCreate struct {
+	MatchType  string `json:"matchType"`
+	MaxPlayers int    `json:"maxPlayers"`
 }
 
 func HashPassword(password string) (string, error) {
@@ -301,28 +308,34 @@ func main() {
 		}
 		username := usernameFuck.(string)
 
-		var game Game
+		var req_game GameCreate
 
-		if err := c.ShouldBindJSON(&game); err != nil {
+		if err := c.ShouldBindJSON(&req_game); err != nil {
 			c.Status(http.StatusBadRequest)
 			return
 		}
 
-		game.Owner = username
 		id, err := gonanoid.Generate("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", 9)
 		if err != nil {
 			log.Printf("error: %s", err.Error())
 			c.Status(http.StatusInternalServerError)
 			return
 		}
-		game.Id = id
 
-		game.Status = "open"
-
+		game := Game{
+			Id:         id,
+			Status:     "open",
+			MatchType:  req_game.MatchType,
+			MaxPlayers: req_game.MaxPlayers,
+			Players:    []string{username},
+			Owner:      username,
+			Many:       1,
+			Winner:     "no one",
+		}
 		config.InitDB()
 
 		_, err = config.DB.Exec(context.Background(),
-			"INSERT INTO games (id, owner, status, public, players, many) VALUES ($1, $2, $3, $4, $5, $6)", id, username, game.Status, game.Public, []string{username}, game.Many)
+			"INSERT INTO games (id, owner, status, matchType, players, many, winner, maxPlayers) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)", game.Id, game.Owner, game.Status, game.MatchType, game.Players, game.Many, game.Winner, game.MaxPlayers)
 
 		if err != nil {
 			log.Printf("error: %s", err.Error())
@@ -330,7 +343,7 @@ func main() {
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"id": id})
+		c.JSON(http.StatusCreated, gin.H{"id": id})
 
 		// room addded on database
 
