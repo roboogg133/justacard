@@ -224,7 +224,7 @@ func main() {
 			return
 		}
 
-		if strings.ContainsAny(req.Username, " ") || strings.ContainsAny(req.Password, " ") || req.Password == "" || req.Username == "" {
+		if strings.ContainsAny(req.Username, " ") || strings.ContainsAny(req.Password, " ") || req.Password == "" || req.Username == "" || len(req.Username) > 20 || len(req.Username) < 2 {
 			c.JSON(http.StatusBadRequest, gin.H{"response": "invalid username or password"})
 			return
 		}
