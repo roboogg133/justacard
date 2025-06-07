@@ -126,7 +126,7 @@ func AuthRefresh() gin.HandlerFunc {
 		tokenString, err := c.Cookie("RefreshToken")
 
 		if err != nil {
-			c.AbortWithStatus(http.StatusForbidden)
+			c.Redirect(http.StatusSeeOther, "/service/login")
 			return
 		}
 
@@ -315,6 +315,17 @@ func main() {
 			return
 		}
 
+		if req_game.MatchType != "Casual" || req_game.MaxPlayers < 2 {
+			c.Status(http.StatusBadRequest)
+			return
+		} else if req_game.MatchType != "Ranked" {
+			c.Status(http.StatusBadRequest)
+			return
+		} else if req_game.MatchType != "Private" {
+			c.Status(http.StatusBadRequest)
+			return
+		}
+
 		id, err := gonanoid.Generate("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", 9)
 		if err != nil {
 			log.Printf("error: %s", err.Error())
@@ -359,6 +370,19 @@ func main() {
 
 		if id == "" {
 			c.Redirect(http.StatusTemporaryRedirect, "/home")
+			return
+		}
+
+		config.InitDB()
+
+		var roomID string
+
+		err := config.DB.QueryRow(context.Background(),
+			"SELECT id FROM games WHERE id = $1", id).Scan(&roomID)
+
+		if err != nil {
+			log.Printf("error: %s", err.Error())
+			c.Status(http.StatusInternalServerError)
 			return
 		}
 
