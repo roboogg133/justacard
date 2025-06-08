@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -43,7 +44,7 @@ func HashPassword(password string) (string, error) {
 	return string(bytes), err
 }
 
-var upgrader = websocket.Upgrader{
+var Upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		return true
 	},
@@ -249,7 +250,15 @@ func main() {
 		}
 		c.Header("Location", lastPage)
 
-		username := c.MustGet("username").(string)
+		usernameRaw, exists := c.Get("username")
+
+		username := usernameRaw.(string)
+
+		if !exists {
+			log.Println("Username not found")
+			c.Redirect(http.StatusSeeOther, "/home/refresh")
+			return
+		}
 
 		token, err := config.GenerateJWTAccessToken(username)
 		if err != nil {
@@ -288,10 +297,18 @@ func main() {
 
 	})
 
-	r.GET("/home", AuthAccess(), func(c *gin.Context) {
+	r.GET("/home/", AuthAccess(), func(c *gin.Context) {
 		r.LoadHTMLFiles("pages/home.html")
 
-		username := c.MustGet("username").(string)
+		usernameRaw, exists := c.Get("username")
+
+		username := usernameRaw.(string)
+
+		if !exists {
+			log.Println("Username not found")
+			c.Redirect(http.StatusSeeOther, "/home/")
+			return
+		}
 
 		c.HTML(http.StatusOK, "home.html", gin.H{"Name": username})
 
@@ -338,7 +355,7 @@ func main() {
 			Status:     "open",
 			MatchType:  req_game.MatchType,
 			MaxPlayers: req_game.MaxPlayers,
-			Players:    []string{username},
+			Players:    []string{},
 			Owner:      username,
 			Many:       1,
 			Winner:     "no one",
@@ -382,15 +399,84 @@ func main() {
 
 		if err != nil {
 			log.Printf("error: %s", err.Error())
-			c.Status(http.StatusInternalServerError)
+			c.AbortWithStatus(http.StatusBadRequest)
 			return
 		}
 
 		r.LoadHTMLFiles("pages/home.html")
 
-		username := c.MustGet("username").(string)
+		usernameRaw, exists := c.Get("username")
+
+		username := usernameRaw.(string)
+
+		if !exists {
+			log.Println("Username not found")
+			c.Redirect(http.StatusSeeOther, fmt.Sprintf("/home/%s", id))
+			return
+		}
 
 		c.HTML(http.StatusOK, "home.html", gin.H{"Name": username})
+
+	})
+
+	r.GET("/service/game/:id", AuthAccess(), func(c *gin.Context) {
+
+		id := c.Param("id")
+
+		if id == "" {
+			c.AbortWithStatus(http.StatusBadRequest)
+			return
+		}
+
+		config.InitDB()
+
+		var roomID string
+
+		err := config.DB.QueryRow(context.Background(),
+			"SELECT id FROM games WHERE id = $1", id).Scan(&roomID)
+
+		if err != nil {
+			log.Printf("error: %s", err.Error())
+			c.AbortWithStatus(http.StatusBadRequest)
+			return
+		}
+
+		conn, err := Upgrader.Upgrade(c.Writer, c.Request, nil)
+		if err != nil {
+			log.Printf("WebSocket upgrade error: %s", err.Error())
+			c.AbortWithStatus(http.StatusInternalServerError)
+			return
+		}
+		defer conn.Close()
+
+		log.Println("New connection established")
+
+		value, exists := c.Get("username")
+		if !exists {
+			log.Println("Username not found")
+			c.AbortWithStatus(http.StatusBadRequest)
+			return
+		}
+
+		config.InitDB()
+
+		_, err = config.DB.Exec(context.Background(),
+			"INSERT INTO games (players) VALUES ($1) WHERE games = $2", value, id)
+
+		for {
+			_, msg, err := conn.ReadMessage()
+			if err != nil {
+				log.Printf("error: %s", err.Error())
+				c.AbortWithStatus(http.StatusBadRequest)
+				return
+			}
+
+			log.Println(msg)
+
+			// Process the message
+			// ...
+
+		}
 
 	})
 
