@@ -50,6 +50,19 @@ var Upgrader = websocket.Upgrader{
 	},
 }
 
+func Deauth(user string) error {
+
+	config.InitDB()
+
+	_, err := config.DB.Exec(context.Background(),
+		"UPDATE users SET revoke = $1 WHERE username = $2", time.Now().UTC(), user)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func Authenticate(user string, rawpass string) bool {
 	config.InitDB()
 
@@ -114,6 +127,8 @@ func AuthAccess() gin.HandlerFunc {
 			return
 		}
 
+		config.InitDB()
+
 		var revoke time.Time
 
 		err = config.DB.QueryRow(context.Background(),
@@ -159,6 +174,7 @@ func AuthRefresh() gin.HandlerFunc {
 			c.AbortWithStatus(http.StatusForbidden)
 			return
 		}
+		config.InitDB()
 
 		var revoke time.Time
 
@@ -183,7 +199,7 @@ func main() {
 
 	r := gin.Default()
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"https://servidordomal.fun", "*://31.97.20.160"},
+		AllowOrigins:     []string{"https://servidordomal.fun", "*://181.215.4.195"},
 		AllowMethods:     []string{"GET", "POST", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type"},
 		ExposeHeaders:    []string{"Content-Length"},
@@ -281,13 +297,13 @@ func main() {
 
 		usernameRaw, exists := c.Get("username")
 
-		username := usernameRaw.(string)
-
 		if !exists {
 			log.Println("Username not found")
 			c.Redirect(http.StatusSeeOther, "/home/refresh")
 			return
 		}
+
+		username := usernameRaw.(string)
 
 		token, err := config.GenerateJWTAccessToken(username)
 		if err != nil {
@@ -331,13 +347,13 @@ func main() {
 
 		usernameRaw, exists := c.Get("username")
 
-		username := usernameRaw.(string)
-
 		if !exists {
 			log.Println("Username not found")
 			c.Redirect(http.StatusSeeOther, "/home/")
 			return
 		}
+
+		username := usernameRaw.(string)
 
 		c.HTML(http.StatusOK, "home.html", gin.H{"Name": username})
 
@@ -436,13 +452,12 @@ func main() {
 
 		usernameRaw, exists := c.Get("username")
 
-		username := usernameRaw.(string)
-
 		if !exists {
 			log.Println("Username not found")
 			c.Redirect(http.StatusSeeOther, fmt.Sprintf("/home/%s", id))
 			return
 		}
+		username := usernameRaw.(string)
 
 		c.HTML(http.StatusOK, "home.html", gin.H{"Name": username})
 
@@ -506,6 +521,20 @@ func main() {
 			// ...
 
 		}
+
+	})
+
+	r.POST("/service/deauth/:id", func(c *gin.Context) {
+
+		var user = c.Param("id")
+
+		err := Deauth(user)
+		if err != nil {
+			log.Panic(err)
+			c.AbortWithStatus(http.StatusInternalServerError)
+		}
+
+		c.Status(http.StatusOK)
 
 	})
 
