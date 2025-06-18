@@ -115,6 +115,7 @@ func AuthAccess() gin.HandlerFunc {
 			return
 		}
 
+		log.Printf("%s\n", claims.IssuedAt.Time)
 		log.Printf("Access token authenticated for user: %s", claims.Username)
 
 		c.Set("username", claims.Username)
@@ -172,7 +173,7 @@ func main() {
 
 		value := Authenticate(req.Username, req.Password)
 
-		if value == true {
+		if value {
 			token, err := config.GenerateJWTAccessToken(req.Username)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"response": "failed to generate tokens"})
@@ -209,7 +210,7 @@ func main() {
 			c.Status(http.StatusOK)
 			return
 		}
-		if value == false {
+		if !value {
 			c.Status(http.StatusUnauthorized)
 			return
 		}
@@ -381,7 +382,7 @@ func main() {
 
 	})
 
-	r.GET("/home/:id", AuthAccess(), func(c *gin.Context) {
+	r.GET("/play/:id", AuthAccess(), func(c *gin.Context) {
 
 		id := c.Param("id")
 
