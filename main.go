@@ -58,7 +58,6 @@ func Authenticate(user string, rawpass string) bool {
 	// Search for the username
 	err := config.DB.QueryRow(context.Background(),
 		"SELECT password FROM users WHERE username = $1", user).Scan(&password)
-
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return false
@@ -115,7 +114,22 @@ func AuthAccess() gin.HandlerFunc {
 			return
 		}
 
-		log.Printf("%s\n", claims.IssuedAt.Time)
+		var revoke time.Time
+
+		err = config.DB.QueryRow(context.Background(),
+			"SELECT revoke FROM users WHERE username = $1", claims.Username).Scan(&revoke)
+
+		if err != nil {
+			c.AbortWithStatus(http.StatusUnauthorized)
+			return
+		}
+
+		if claims.IssuedAt.Time.UTC().Before(revoke) {
+			c.AbortWithStatus(http.StatusUnauthorized)
+			return
+		}
+
+		log.Printf("%s\n", claims.IssuedAt.Time.UTC())
 		log.Printf("Access token authenticated for user: %s", claims.Username)
 
 		c.Set("username", claims.Username)
@@ -143,6 +157,20 @@ func AuthRefresh() gin.HandlerFunc {
 		}
 		if claims.TokenType != "refresh" {
 			c.AbortWithStatus(http.StatusForbidden)
+			return
+		}
+
+		var revoke time.Time
+
+		err = config.DB.QueryRow(context.Background(),
+			"SELECT revoke FROM users WHERE username = $1", claims.Username).Scan(&revoke)
+
+		if err != nil {
+			c.AbortWithStatus(http.StatusUnauthorized)
+		}
+
+		if claims.IssuedAt.Time.UTC().Before(revoke) {
+			c.AbortWithStatus(http.StatusUnauthorized)
 			return
 		}
 
